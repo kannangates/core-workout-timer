@@ -125,6 +125,45 @@
       font-weight: 750;
     }
 
+    /* ── Level nav ── */
+    .level-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 10px;
+    }
+
+    .level-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 700;
+      white-space: nowrap;
+      margin-right: 2px;
+    }
+
+    .level-btn {
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      transition: color 0.2s, background 0.2s, border-color 0.2s;
+      flex: 1;
+      text-align: center;
+    }
+
+    .level-btn.active {
+      color: var(--accent);
+      background: rgba(255, 109, 0, 0.08);
+      border-color: rgba(255, 109, 0, 0.30);
+    }
+
     /* ── Hero ── */
     .hero {
       background: #ffffff;
@@ -450,6 +489,46 @@
 
     .completion-btn { width: 100%; min-height: 56px; font-size: 1rem; }
 
+    /* ── iOS install banner ── */
+    .install-banner {
+      position: fixed;
+      bottom: max(90px, calc(78px + env(safe-area-inset-bottom)));
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(calc(100% - 32px), 488px);
+      background: #111;
+      color: #fff;
+      font-size: 0.82rem;
+      padding: 10px 14px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      z-index: 30;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    .install-close {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      font-size: 0.7rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+    }
+
     .hidden { display: none !important; }
 
     /* ── Landscape ── */
@@ -490,6 +569,12 @@
 </head>
 <body>
 
+  <!-- ── iOS install banner ── -->
+  <div class="install-banner hidden" id="installBanner">
+    <span>📲 Tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong> to install</span>
+    <button class="install-close" id="installClose" type="button" aria-label="Dismiss">✕</button>
+  </div>
+
   <!-- ── Completion overlay ── -->
   <div class="completion-overlay hidden" id="completionOverlay" role="dialog" aria-modal="true" aria-label="Workout complete">
     <div class="completion-card">
@@ -519,7 +604,16 @@
       <button class="small-btn phase-skip" id="phaseSkip" type="button">Skip</button>
     </nav>
 
-    <!-- hidden inputs keep JS happy without visible UI -->
+    <!-- Level selector — visible only during Core phase -->
+    <div class="level-nav" id="levelNav" aria-label="Workout level">
+      <span class="level-label">Level:</span>
+      <button class="level-btn active" data-level="beginner"  type="button">Beginner</button>
+      <button class="level-btn"        data-level="intermediate" type="button">Intermediate</button>
+      <button class="level-btn"        data-level="advanced"  type="button">Advanced</button>
+      <button class="level-btn"        data-level="all"       type="button">All</button>
+    </div>
+
+    <!-- hidden controls keep JS listeners happy -->
     <select id="levelSelect" aria-hidden="true" style="display:none">
       <option value="beginner" selected>Beginner</option>
       <option value="intermediate">Intermediate</option>
@@ -562,7 +656,7 @@
         <button class="secondary" id="plusTime" type="button">+10 sec</button>
       </div>
 
-      <button class="secondary" id="soundToggle" type="button">Sound on</button>
+      <button class="secondary" id="soundToggle" type="button">🔊 Sound on</button>
 
       <section class="rep-panel" aria-label="Rep counter">
         <button class="rep-btn" id="repMinus" type="button" aria-label="Decrease reps">−</button>
@@ -813,6 +907,8 @@
     const phaseWorkBtn = $("phaseWorkout");
     const phaseCoolBtn = $("phaseCooldown");
     const phaseSkipBtn = $("phaseSkip");
+    const levelNav     = $("levelNav");
+    const levelBtns    = document.querySelectorAll(".level-btn");
 
     // ── Persistence ────────────────────────────────────────────────────────
 
@@ -1146,9 +1242,12 @@
 
       renderElapsed();
 
-      // Level select — only active during workout phase
-      levelSelect.value    = state.level;
-      levelSelect.disabled = state.phase !== "workout";
+      // Level nav — only visible during workout phase
+      levelNav.style.display = state.phase === "workout" ? "" : "none";
+      levelSelect.value = state.level;
+      levelBtns.forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.level === state.level);
+      });
 
       // Phase nav buttons
       const phaseOrder = ["warmup", "workout", "cooldown"];
@@ -1340,10 +1439,10 @@
 
     soundToggle.addEventListener("click", () => {
       const cycle  = ["on", "haptic", "off"];
-      const labels = { on: "Sound on", haptic: "Haptic only", off: "Sound off" };
+      const labels = { on: "🔊 Sound on", haptic: "📳 Haptic only", off: "🔇 Sound off" };
       soundMode = cycle[(cycle.indexOf(soundMode) + 1) % cycle.length];
       soundToggle.textContent = labels[soundMode];
-      if (soundMode === "on")     beep(660, 0.08, 0.1);
+      if (soundMode === "on")          beep(660, 0.08, 0.1);
       else if (soundMode === "haptic") vibe(40);
     });
 
@@ -1423,6 +1522,16 @@
       state.index = 0;
       const ex = currentExercise();
       setTimer(ex.seconds, "exercise");
+    });
+
+    levelBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        state.level = btn.dataset.level;
+        state.index = 0;
+        levelSelect.value = state.level;
+        const ex = currentExercise();
+        setTimer(ex.seconds, "exercise");
+      });
     });
 
     $("resetWorkout").addEventListener("click", resetAll);
@@ -1581,6 +1690,21 @@
       updateWakeLockStatus();
     }
     render();
+
+    // iOS "Add to Home Screen" banner — show once on iOS Safari if not installed
+    (function showInstallBanner() {
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isStandalone = window.navigator.standalone === true;
+      const dismissed = localStorage.getItem("install-banner-dismissed");
+      if (isIOS && !isStandalone && !dismissed) {
+        const banner = $("installBanner");
+        setTimeout(() => banner.classList.remove("hidden"), 2000);
+        $("installClose").addEventListener("click", () => {
+          banner.classList.add("hidden");
+          try { localStorage.setItem("install-banner-dismissed", "1"); } catch {}
+        });
+      }
+    })();
   </script>
 </body>
 </html>
