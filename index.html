@@ -1611,7 +1611,7 @@
     // ── PWA ────────────────────────────────────────────────────────────────
 
     (function setupPWA() {
-      // Inline manifest
+      // Inject manifest for PWA install (Add to Home Screen)
       const manifest = {
         name: "Core Workout Timer",
         short_name: "Core Workout",
@@ -1630,32 +1630,21 @@
           purpose: "any maskable"
         }]
       };
-      const link  = document.createElement("link");
-      link.rel    = "manifest";
-      link.href   = "data:application/manifest+json," + encodeURIComponent(JSON.stringify(manifest));
+      const link = document.createElement("link");
+      link.rel   = "manifest";
+      link.href  = "data:application/manifest+json," + encodeURIComponent(JSON.stringify(manifest));
       document.head.appendChild(link);
 
-      // Service worker via blob (works on localhost / HTTPS)
+      // Unregister any previously installed service workers and clear their caches.
+      // Cloudflare Pages handles caching at the CDN level — a local SW only causes
+      // stale-page problems (broken refresh, stale JS, broken buttons).
       if ("serviceWorker" in navigator) {
-        try {
-          const sw = `
-            const CACHE='core-workout-v1';
-            self.addEventListener('install',e=>{
-              e.waitUntil(caches.open(CACHE).then(c=>c.add(self.location.pathname||'/')).then(()=>self.skipWaiting()).catch(()=>self.skipWaiting()));
-            });
-            self.addEventListener('activate',e=>{
-              e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
-            });
-            self.addEventListener('fetch',e=>{
-              e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{
-                if(res.ok&&e.request.method==='GET'){const cl=res.clone();caches.open(CACHE).then(c=>c.put(e.request,cl));}
-                return res;
-              }).catch(()=>caches.match(e.request))));
-            });
-          `;
-          const blob = new Blob([sw], { type: "application/javascript" });
-          navigator.serviceWorker.register(URL.createObjectURL(blob), { scope: "./" }).catch(() => {});
-        } catch {}
+        navigator.serviceWorker.getRegistrations()
+          .then(regs => regs.forEach(r => r.unregister()))
+          .catch(() => {});
+        if (window.caches) {
+          caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+        }
       }
     })();
 
